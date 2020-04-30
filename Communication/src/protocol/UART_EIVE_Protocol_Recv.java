@@ -1,6 +1,6 @@
-package rcvProtocol;
+package protocol;
 
-public class UART_EIBVE_Protocol_Recv {
+public class UART_EIVE_Protocol_Recv {
 	
 	//XST statics
 	public static final int XST_SUCCESS = 0;
@@ -64,11 +64,14 @@ public class UART_EIBVE_Protocol_Recv {
 		byte header[] = new byte[HEADER_SIZE];
 		
 		byte data[] = new byte[DATA_SIZE];
-		return 0;
+		
+		extract_header(); //define method!!
+		
+		
 	}
 	
 	int receive_data() {
-		return 0;
+		
 		
 	}
 	
