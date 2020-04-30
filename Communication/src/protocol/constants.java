@@ -24,6 +24,11 @@ public class constants {
 	//ACK , NACK
 	public static final int ACK = 1;
 	public static final int NACK = 0;
+	public static final int SET = 1;
+	
+	public static final byte INIT_CRC = 0x00;
+	
+	public static final int MAX_TIMER = 5000; //need to be calculcated!!
 	
 	
 	
