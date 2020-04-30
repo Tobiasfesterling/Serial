@@ -21,7 +21,7 @@ public class constants {
 	public static final int FLAGS_POS = 3;
 	
 	//Receive Buffer
-	public byte RecvBuffer[] = new byte[BUFFER_SIZE];
+	public static byte RecvBuffer[] = new byte[BUFFER_SIZE];
 	
 	//ACK , NACK
 	public static final int ACK = 1;
