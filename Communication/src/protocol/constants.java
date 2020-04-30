@@ -9,8 +9,8 @@ public class constants {
 	
 	//Header, Data and Package size
 	public static final int HEADER_SIZE = 4;
-	public static final int DATA_SIZE = 28;
-	public static final int PACKAGE_SIZE = 32;
+	public static final int PACKAGE_DATA_SIZE = 28;
+	public static final int BUFFER_SIZE = 32;
 	
 	//Header positions
 	public static final int ID_POS = 0;
@@ -19,7 +19,7 @@ public class constants {
 	public static final int FLAGS_POS = 3;
 	
 	//Receive Buffer
-	public byte RecvBuffer[] = new byte[PACKAGE_SIZE];
+	public byte RecvBuffer[] = new byte[BUFFER_SIZE];
 	
 	//ACK , NACK
 	public static final int ACK = 1;
