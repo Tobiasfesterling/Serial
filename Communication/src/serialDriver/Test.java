@@ -17,9 +17,9 @@ public class Test
 			i++;
 		}
 		System.out.println("Mit welchem Port verbinden?");
-		//String port = in.nextLine();
-		//System.out.println(port);
-		comm.connect("/dev/cu.usbmodem14101");
+		String port = in.nextLine();
+		System.out.println(port);
+		comm.connect(port);
 		
 		while(comm.isConnected())
 		{
