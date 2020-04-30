@@ -8,17 +8,21 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.TooManyListenersException;
-
+/*
 import gnu.io.CommPort;
 import gnu.io.CommPortIdentifier;
 import gnu.io.PortInUseException;
 import gnu.io.SerialPort;
-import gnu.io.UnsupportedCommOperationException;
+import gnu.io.UnsupportedCommOperationException;*/
+
+import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
 
 public class SerialDriver {
 
 	static SerialDriver comm = null;
-
+/*
 	// contains the ports that will be found
 	private Enumeration ports = null;
 
@@ -26,7 +30,7 @@ public class SerialDriver {
 	private HashMap<String, CommPortIdentifier> portMap = new HashMap<>();
 
 	// Object that contains the opened port
-	private CommPortIdentifier portIdentifier = null;
+	private CommPortIdentifier portIdentifier = null;*/
 	private SerialPort serialPort = null;
 
 	// Streams to send or receive data
@@ -101,8 +105,16 @@ public class SerialDriver {
 	 * 
 	 * @return
 	 */
-	public Set<String> identifySerialPorts() {
-		ports = CommPortIdentifier.getPortIdentifiers();
+	public String[] identifySerialPorts() {
+		
+		SerialPort ports[] = SerialPort.getCommPorts();
+		
+		String[] portSet = new String[ports.length];
+		
+		for(int i = 0; i < ports.length; i++)
+			portSet[i] = ports[i].getSystemPortName();
+		
+		/*ports = CommPortIdentifier.getPortIdentifiers();
 
 		while (ports.hasMoreElements()) {
 			CommPortIdentifier current = (CommPortIdentifier) ports.nextElement();
@@ -113,7 +125,9 @@ public class SerialDriver {
 			logStream.println("Start: " + current.getName());
 		}
 
-		return portMap.keySet();
+		return portMap.keySet();*/
+		
+		return portSet;
 	}
 
 	/**
@@ -121,9 +135,11 @@ public class SerialDriver {
 	 * @param port
 	 */
 	public void connect(String port)
-	{
+	{/*
 		connect(port, DEFAULT_BAUDRATE, SerialPort.DATABITS_8, SerialPort.STOPBITS_1,
 				SerialPort.PARITY_NONE);
+				*/
+		connect(port, DEFAULT_BAUDRATE, 8, 1, 0);
 	}
 	
 	/**
@@ -133,8 +149,8 @@ public class SerialDriver {
 	 */
 	public void connect(String port, int baudrate)
 	{
-		connect(port, baudrate, SerialPort.DATABITS_8, SerialPort.STOPBITS_1,
-					SerialPort.PARITY_NONE);
+		//connect(port, baudrate, SerialPort.DATABITS_8, SerialPort.STOPBITS_1,
+			//		SerialPort.PARITY_NONE);
 	}
 	
 	/**
@@ -148,23 +164,17 @@ public class SerialDriver {
 	public void connect(String port, int baudrate, int databits, int stopbits, int parity) {
 		connected = false;
 
-		try {
 			openSerialPort(port, baudrate, databits, stopbits, parity);
+
 			setupListener();
 
-			connected = initIOStreams();
+			if (serialPort.isOpen()) {
+				connected = initIOStreams();
 
-			logStream.println("Connected sucsessfully to " + port);
-
-		} catch (PortInUseException e) {
-			String logText = "!!!No connection possible!!!\n" + port + " is already in use (" + e.getMessage() + ")";
-			System.err.println(logText);
-
-		} catch (Exception e) {
-			String logText = "!!!No connection possible!!!\n" + port + ": unknown Error exists (" + e.getMessage()
-					+ ")";
-			System.err.println(logText);
-		}
+				logStream.println("Connected sucsessfully to " + port);
+			}
+			else
+				System.out.println("ERROR");
 	}
 	
 	/**
@@ -179,8 +189,18 @@ public class SerialDriver {
 	 * @throws PortInUseException
 	 */
 	private void openSerialPort(String portname, int baudrate, int databits, 
-				int stopbits, int parity) throws UnsupportedCommOperationException, PortInUseException
+				int stopbits, int parity)
+						//throws UnsupportedCommOperationException, PortInUseException
 	{
+		
+		 serialPort = SerialPort.getCommPort(portname);
+		 
+		 serialPort.setComPortParameters(baudrate, databits, stopbits, parity);
+			// Initializing port
+		serialPort.openPort();
+		 
+		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
+		/*
 		// get selected port
 		portIdentifier = (CommPortIdentifier) portMap.get(portname);
 
@@ -194,6 +214,7 @@ public class SerialDriver {
 		serialPort = (SerialPort) commPort;
 
 		serialPort.setSerialPortParams(115200, databits, stopbits, parity);
+		*/
 	}
 
 	/**
@@ -201,16 +222,23 @@ public class SerialDriver {
 	 * @param interrupt
 	 * @throws TooManyListenersException
 	 */
-	private void setupListener() throws TooManyListenersException {
+	private void setupListener() {//throws TooManyListenersException {
 
-		serialPort.addEventListener(new EventListener(this) {
+		serialPort.addDataListener(new SerialPortDataListener() {
 			@Override
-			public void dataAvailable() {
+			public int getListeningEvents() {
+				return SerialPort.LISTENING_EVENT_DATA_AVAILABLE;
+			}
+
+			public void serialEvent(SerialPortEvent event) {
+				if (event.getEventType() != SerialPort.LISTENING_EVENT_DATA_AVAILABLE)
+					return;
+				
 				System.out.println("ReadFromPort");
 				readBytes(recvBuffer.length);
 			}
 		});
-		serialPort.notifyOnDataAvailable(true);
+		//serialPort.notifyOnDataAvailable(true);
 	}
 
 	/**
@@ -220,20 +248,13 @@ public class SerialDriver {
 	private boolean initIOStreams() {
 		// return value if IOstreams opened successfully or not
 
-		try {
-			// get IStream from port
-			inStream = new BufferedInputStream(serialPort.getInputStream());
+		// get IStream from port
+		inStream = new BufferedInputStream(serialPort.getInputStream());
 
-			// get OStream from port
-			out = serialPort.getOutputStream();
+		// get OStream from port
+		out = serialPort.getOutputStream();
 
-			System.out.println("Streams opened successfully");
-
-		} catch (IOException e) {
-
-			System.err.println(e.toString());
-			return false;
-		}
+		System.out.println("Streams opened successfully");
 
 		return true;
 	}
@@ -262,13 +283,14 @@ public class SerialDriver {
 				{
 					if(data == -1)
 					{
+						System.out.println("break1");
 						break;
 					}
 					available = inStream.available();
 					synchronized (recvBuffer) 
 					{	
 						recvBuffer[byteCounter++] = (byte) data;
-						//System.out.println((char) data + " -> " + available + " <- " + byteCounter);
+						System.out.println((char) data + " -> " + available + " <- " + byteCounter);
 					}
 					
 					if(byteCounter == byteCount)
@@ -358,7 +380,7 @@ public class SerialDriver {
 	 */
 	public boolean disconnect() {
 		try {
-			serialPort.close();
+			serialPort.closePort();
 			inStream.close();
 			out.close();
 			connected = false;
