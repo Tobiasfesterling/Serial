@@ -1,6 +1,6 @@
 package protocol.crc;
 
-import protocol.constants;
+import protocol.Constants;
 
 public class CRC {
 
@@ -64,41 +64,41 @@ public static byte calc_crc8_for_data(byte bytes[], int length, byte crc_initval
 	return crc_val;
 }
 
-byte calc_crc8(byte send_array[], byte crc_initval)
+public static byte calc_crc8(byte send_array[], byte crc_initval)
 {
 	System.out.println("crc8: initval: " + crc_initval);
-	byte temp31[] = new byte[constants.BUFFER_SIZE - 1];
+	byte temp31[] = new byte[Constants.BUFFER_SIZE - 1];
 
-	for(int i = 0; i < constants.CRC_POS; i++)
+	for(int i = 0; i < Constants.CRC_POS; i++)
 	{
 		temp31[i] = send_array[i];
 	}
 
-	for(int j = constants.CRC_POS; j < constants.BUFFER_SIZE - 1; j++)
+	for(int j = Constants.CRC_POS; j < Constants.BUFFER_SIZE - 1; j++)
 	{
 		temp31[j] = send_array[j + 1];
 	}
 
 	System.out.println("calc crc8");
-	return calc_crc8_for_data(temp31, constants.BUFFER_SIZE - 1, crc_initval);
+	return calc_crc8_for_data(temp31, Constants.BUFFER_SIZE - 1, crc_initval);
 }
 
 	/*
 	 *
 	 */
-int check_crc(byte crc_val, byte rcv_buffer[], byte crc_initval)
+public static int check_crc(byte crc_val, byte rcv_buffer[], byte crc_initval)
 {
 	byte calculated_crc;
 
 	calculated_crc = calc_crc8(rcv_buffer, crc_initval);
 
 	if(calculated_crc != crc_val)
-		return constants.XST_FAILURE;
+		return Constants.XST_FAILURE;
 
 
 	//*crc_initval = calculated_crc;
 
-	return constants.XST_SUCCESS;
+	return Constants.XST_SUCCESS;
 }
 
 }

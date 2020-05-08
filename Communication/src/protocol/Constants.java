@@ -1,6 +1,6 @@
 package protocol;
 
-public class constants {
+public class Constants {
 
 	//XST statics
 	public static final int XST_SUCCESS = 0;
