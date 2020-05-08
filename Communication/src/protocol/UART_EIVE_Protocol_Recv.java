@@ -1,12 +1,15 @@
 package protocol;
-import protocol.constants;
+//import com.sun.org.apache.bcel.internal.Const;
+
+import protocol.Constants;
+import protocol.flags.UART_EIVE_Protocol_Flags;
 
 public class UART_EIVE_Protocol_Recv {
 	
 	//CRC
-	public byte last_crc_send = constants.INIT_CRC;
-	public byte last_crc_rcv = constants.INIT_CRC;
-	public byte calc_crc = constants.INIT_CRC;
+	public byte last_crc_send = Constants.INIT_CRC;
+	public byte last_crc_rcv = Constants.INIT_CRC;
+	public byte calc_crc = Constants.INIT_CRC;
 	
 	//flags
 	public byte new_flags = 0x00;
@@ -17,106 +20,106 @@ public class UART_EIVE_Protocol_Recv {
 	//Long buffer for receiving data
 	public static byte databuffer[] = new byte[573483];
 	
-	public byte header[] = new byte[constants.HEADER_SIZE];
-	public byte data[] = new byte[constants.PACKAGE_DATA_SIZE];
+	public byte header[] = new byte[Constants.HEADER_SIZE];
+	public byte data[] = new byte[Constants.PACKAGE_DATA_SIZE];
 
 	public static int UART_Recv_Data() {
 		
-		int status = constants.XST_SUCCESS;
+		int status = Constants.XST_SUCCESS;
 		
 		if((status = recv_data) //empfangsmethode anpassen, define method
 				System.out.println("Error receiving data!!");
 		
-		if(status == constants.XST_FAILURE)
-			return constants.XST_FAILURE;
+		if(status == Constants.XST_FAILURE)
+			return Constants.XST_FAILURE;
 		
 		status = receive();
 		
-		if(status != constants.XST_SUCCESS)
-			return constants.XST_FAILURE;
+		if(status != Constants.XST_SUCCESS)
+			return Constants.XST_FAILURE;
 		
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 	
-	public int receive() {
-		int status = constants.XST_SUCCESS;
+	public static int receive() {
+		int status = Constants.XST_SUCCESS;
 		
 		//connection establishment
 		status = connection_establishment();
 		
-		if(status == constants.XST_FAILURE)
-			return constants.XST_FAILURE;
+		if(status == Constants.XST_FAILURE)
+			return Constants.XST_FAILURE;
 		
 		//receive the TM/TCs
 		status = receive_data(); //define method!!
 		
-		if(status == constants.XST_FAILURE)
-			return constants.XST_FAILURE;
+		if(status == Constants.XST_FAILURE)
+			return Constants.XST_FAILURE;
 		
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 	
 	public int connection_establishment() {
-		byte header[] = new byte[constants.HEADER_SIZE];
+		byte header[] = new byte[Constants.HEADER_SIZE];
 		
-		byte data[] = new byte[constants.PACKAGE_DATA_SIZE];
+		byte data[] = new byte[Constants.PACKAGE_DATA_SIZE];
 		
 		extract_header(); //define method!!
 		
-		conn_id = header[constants.ID_POS];
+		conn_id = header[Constants.ID_POS];
 		
-		if(check_crc(header[constants.CRC_POS], RecvBuffer, constants.INIT_CRC) != constants.XST_SUCCESS) {
+		if(check_crc(header[Constants.CRC_POS], RecvBuffer, Constants.INIT_CRC) != Constants.XST_SUCCESS) {
 			//define method check_crc
-			send_failure(header[constants.ID_POS]); //define method
-			return constants.XST_FAILURE;
+			send_failure(header[Constants.ID_POS]); //define method
+			return Constants.XST_FAILURE;
 		}
 		
-		set_ACK_Flag(); //define method
+		UART_EIVE_Protocol_Flags.set_ACK_Flag(new_flags, Constants.ACK); //define method
 		
 		//check request to send
-		if(get_Req_to_send_flag(header[constants.FLAGS_POS]) == 0) {
+		if(UART_EIVE_Protocol_Flags.get_Req_to_send_flag(header[Constants.FLAGS_POS]) == 0) {
 			//define method
 			//Send answer without set ACK flag
 			send_failure(); //define method
 			
-			return constants.XST_FAILURE;
+			return Constants.XST_FAILURE;
 		}
 		
-		set_Rdy_to_rcv_Flag(); //define method
+		UART_EIVE_Protocol_Flags.set_Rdy_to_rcv_Flag(new_flags, Constants.ACK); //define method
 		
 		int status;
 		
-		last_crc_rcv = header[constants.CRC_POS];
+		last_crc_rcv = header[Constants.CRC_POS];
 		
 		return status;
 	}
 	
 	public int receive_data(byte last_sent_falgs) {
-		byte next_header[] = new byte[constants.HEADER_SIZE];
-		byte new_data[] = new byte[constants.PACKAGE_DATA_SIZE];
+		byte next_header[] = new byte[Constants.HEADER_SIZE];
+		byte new_data[] = new byte[Constants.PACKAGE_DATA_SIZE];
 		
 		byte flags_to_send = last_sent_falgs;
 		
 		int datacounter = 0;
 		int pkgCounter = 0;
 		int end = 0;
-		int status = constants.XST_NO_DATA;
+		int status = Constants.XST_NO_DATA;
 		int timer = 1;
-		int success = constants.SET;
+		int success = Constants.SET;
 		
-		while(end != constants.SET) {
+		while(end != Constants.SET) {
 			//receiving answer
-			while(status == constants.XST_NO_DATA) {
+			while(status == Constants.XST_NO_DATA) {
 				//timeout for receiving, reset timer for new sending
-				if(timer == constants.MAX_TIMER) {
+				if(timer == Constants.MAX_TIMER) {
 					timer = 0;
 				}
 				if(timer == 0) {
-					if(success == constants.SET) {
-						send_success(); //define method
+					if(success == Constants.SET) {
+						send_success(conn_id, flags_to_send); //define method
 					}
 					else {
-						send_failure(); //define method
+						send_failure(next_header[Constants.ID_POS]); //define method
 					}
 				}
 				//increase timer
@@ -124,50 +127,50 @@ public class UART_EIVE_Protocol_Recv {
 				
 				//check status of receiving
 				if(recv) //method for receiving
-					return constants.XST_FAILURE;	
+					return Constants.XST_FAILURE;	
 			}
 			//data received
 			
 			flags_to_send = 0x00;
 			extract_header(); //define method
 			
-			if(check_crc != constants.XST_SUCCESS) {
+			if(check_crc != Constants.XST_SUCCESS) {
 				//failure
 				success = 0;
 				timer = 0;
-				status = constants.XST_NO_DATA;
+				status = Constants.XST_NO_DATA;
 				continue;
 			}
 			
-			set_ACK_Flag(); //define method
+			UART_EIVE_Protocol_Flags.set_ACK_Flag(flags_to_send, Constants.ACK); //define method
 			
-			if(get_ACK_Flag() != constants.ACK) {
+			if(UART_EIVE_Protocol_Flags.get_ACK_flag(next_header[Constants.FLAGS_POS]) != Constants.ACK) {
 				//failure
 				timer = 0;
-				status = constants.XST_NO_DATA;
+				status = Constants.XST_NO_DATA;
 				continue;
 			}
 			
 			last_crc_send = calc_crc;
-			last_crc_rcv = next_header[constants.CRC_POS];
+			last_crc_rcv = next_header[Constants.CRC_POS];
 			
 			//data buffer
-			for(int bytes = 0; bytes < next_header[constants.DATA_SIZE_POS]; bytes++) {
-				databuffer[pkgCounter * constants.PACKAGE_DATA_SIZE + bytes] = new_data[bytes];
+			for(int bytes = 0; bytes < next_header[Constants.DATA_SIZE_POS]; bytes++) {
+				databuffer[pkgCounter * Constants.PACKAGE_DATA_SIZE + bytes] = new_data[bytes];
 			}
-			datacounter += next_header[constants.DATA_SIZE_POS];
+			datacounter += next_header[Constants.DATA_SIZE_POS];
 			pkgCounter++;
 			
-			if(get_end_flag(next_header[constants.FLAGS_POS]) == 1) {
+			if(UART_EIVE_Protocol_Flags.get_end_flag(next_header[Constants.FLAGS_POS]) == 1) {
 				end = 1;
 				send_success(); //define method
 			}
 			timer = 0;
-			status = constants.XST_NO_DATA;
+			status = Constants.XST_NO_DATA;
 			success = 1;
 		}
 		//check type
-		byte id = (byte) (next_header[constants.ID_POS] & constants.TM_MASK);
+		byte id = (byte) (next_header[Constants.ID_POS] & Constants.TM_MASK);
 		
 		//data array with exact length
 		byte data[] = new byte[datacounter];
@@ -180,32 +183,32 @@ public class UART_EIVE_Protocol_Recv {
 		
 		switch(id) {
 			//received data is tc
-			case constants.TC_MASK: recv_TC(); break;
+			case Constants.TC_MASK: recv_TC(); break;
 			//received data is tm
-			case constants.TM_MASK: recv_TM(); break;
+			case Constants.TM_MASK: recv_TM(); break;
 			
 			default: default_operation();
 		}
 		
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 	
 	public int extract_header() {
-		for(int header_pos = 0; header_pos < constants.HEADER_SIZE; header_pos++)
-			header[header_pos] = constants.RecvBuffer[header_pos];
+		for(int header_pos = 0; header_pos < Constants.HEADER_SIZE; header_pos++)
+			header[header_pos] = Constants.RecvBuffer[header_pos];
 		
-		for(int data_byte = constants.HEADER_SIZE; data_byte < constants.BUFFER_SIZE; data_byte++)
-			data[data_byte - constants.HEADER_SIZE] = constants.RecvBuffer[data_byte];
+		for(int data_byte = Constants.HEADER_SIZE; data_byte < Constants.BUFFER_SIZE; data_byte++)
+			data[data_byte - Constants.HEADER_SIZE] = Constants.RecvBuffer[data_byte];
 		
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 	
 	public int send_failure(byte old_id) {
-		byte failure_flags = UNSET_ALL_FLAGS;
+		byte failure_flags = UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS;
 		
-		byte header[] = new byte[constants.HEADER_SIZE];
+		byte header[] = new byte[Constants.HEADER_SIZE];
 		
-		set_ACK_Flag();
+		UART_EIVE_Protocol_Flags.set_ACK_Flag(failure_flags, Constants.NACK);
 		
 		calc_crc = fill_header_for_empty_data();
 		
@@ -214,32 +217,32 @@ public class UART_EIVE_Protocol_Recv {
 	}
 	
 	public int send_success(byte id, byte flags) {
-		byte header[] = new byte[constants.HEADER_SIZE]; 
+		byte header[] = new byte[Constants.HEADER_SIZE]; 
 		
-		calc_crc = fill_header_for_empty_data();
+		calc_crc = UART_EIVE_Protocol_Send.fill_header_for_empty_data(header, conn_id, flags, last_crc_send);
 		
 		int status = UART_answer(header);
 		return status;
 	}
 	
 	public int UART_answer(byte header) {
-		byte temp[] = new byte[constants.BUFFER_SIZE];
-		temp = {header[constants.ID_POS], header[constants.CRC_POS], header[constants.DATA_SIZE_POS], header[constants.FLAGS_POS]};
+		byte temp[] = new byte[Constants.BUFFER_SIZE];
+		temp = {header[Constants.ID_POS], header[Constants.CRC_POS], header[Constants.DATA_SIZE_POS], header[Constants.FLAGS_POS]};
 		
 		//send method
 		
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 	
 	int recv_TC(byte[] databytes)
 	{
-		byte id = header[constants.ID_POS];
+		byte id = header[Constants.ID_POS];
 		//FILE *fptr;
 
 		switch(id)
 		{
-			case constants.CAMERA_TC: break;
-			case constants.UART_TC: 	System.out.println("Done!");
+			case Constants.CAMERA_TC: break;
+			case Constants.UART_TC: 	System.out.println("Done!");
 							//puts((char*) databytes);
 							/*for(int i = 0; i < size_of_data; i ++)
 								printf("%c", (char) databytes[i]);
@@ -251,14 +254,14 @@ public class UART_EIVE_Protocol_Recv {
 							fwrite(databytes, size_of_data, 1, fptr);
 							fclose(fptr);*/
 							break;
-			case constants.CPU_TC: break;
-			case constants.BRAM_TC: break;
-			case constants.DOWNLINK_TC: break;
-			case constants.DAC_TC: break;
-			default: return constants.XST_FAILURE;
+			case Constants.CPU_TC: break;
+			case Constants.BRAM_TC: break;
+			case Constants.DOWNLINK_TC: break;
+			case Constants.DAC_TC: break;
+			default: return Constants.XST_FAILURE;
 		}
 
-		return constants.XST_SUCCESS;
+		return Constants.XST_SUCCESS;
 	}
 
 }
