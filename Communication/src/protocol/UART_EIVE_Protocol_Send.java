@@ -5,6 +5,8 @@ import protocol.flags.UART_EIVE_Protocol_Flags;
 
 public class UART_EIVE_Protocol_Send 
 {
+	
+	
 	/*
 	 * lastCRC_send saves the calculated CRC for the last send package
 	 * submittedCRC always saves the new received CRC
@@ -46,7 +48,7 @@ int UART_Send_Data(byte ID, byte databytes[], byte dataLength)
 	//send data
 	System.out.println("before send_data");
 	status = send_data(ID, databytes, dataLength);
-System.out.println("after send_data, returnValue: " + status);
+	System.out.println("after send_data, returnValue: " + status);
 
 
 	//return failure if the data could not be send
@@ -274,7 +276,7 @@ int package_count(int dataLength)
  *
  * This method stores in the delivered parameters the received information
  */
-void get_received_data(uint8_t *header, uint8_t *data, uint8_t *flags, uint8_t *submittedCRC)
+void get_received_data(byte[] header, uint8_t *data, uint8_t *flags, uint8_t *submittedCRC)
 {
 	System.out.println("getReceivedData\n");
 	extract_header(RecvBuffer, header, data);
@@ -457,8 +459,10 @@ int wait_on_answer(byte send_array[], byte ID, byte lastCRC_send)
 				temp[Constants.CRC_POS] = nack_header[Constants.CRC_POS];
 				temp[Constants.DATA_SIZE_POS] = nack_header[Constants.DATA_SIZE_POS];
 				temp[Constants.FLAGS_POS] = nack_header[Constants.FLAGS_POS];
-				// -> Network now
+				
 				//UART_Send(temp, 1);
+				
+				// -> Network now
 				if(send(sock, temp, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
 					System.out.println("ERROR waitOnAnswer2");
 			}
@@ -490,15 +494,23 @@ int wait_on_answer(byte send_array[], byte ID, byte lastCRC_send)
  *
  * Fills the submitted variable temp with the databytes and the headers
  */
-void fill_packages(byte ID, int dataLength, byte[] databytes, uint8_t *temp, int packageCount)
+void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int packageCount)
 {
 
 	/*Temporary arrays for header and data*/
 	//uint8_t header[4];
 
-	System.out.println("Fill %i packages with: ", packageCount);
-	System.out.println((char*) databytes);
-	uint8_t header[Constants.HEADER_SIZE] = {ID, INIT_CRC, 0, UNSET_ALL_FLAGS};
+	System.out.printf("Fill %i packages with: ", packageCount);
+	
+	for(byte b: databytes)
+		System.out.print((char) b);
+	System.out.println();
+	
+	byte[] header = new byte[Constants.HEADER_SIZE];
+	header[Constants.ID_POS] = ID;
+	header[Constants.CRC_POS] = CRC.INIT_CRC;
+	header[Constants.DATA_SIZE_POS] = 0;
+	header[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS;
 
 	//uint8_t flags = UNSET_ALL_FLAGS;
 
@@ -510,33 +522,33 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, uint8_t *temp, int
 		{
 			System.out.println("fill header first pkg\n");
 			//Fill header[DATA_SIZE_POS]
-			header[DATA_SIZE_POS] = PACKAGE_DATA_SIZE;
+			header[Constants.DATA_SIZE_POS] = Constants.PACKAGE_DATA_SIZE;
 
 			System.out.println("Set start flag\n");
 			/*
 			 * fill header with the given information
 			 * flags for the start package
 			 */
-			UART_EIVE_Protocol_Flags.set_Start_Flag(header[FLAGS_POS], SET);
+			UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
 
 			//Setting end-flag if only one package will be send
 			if(packageCount == 1)
-				UART_EIVE_Protocol_Flags.set_End_Flag(header[FLAGS_POS], SET);
+				UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
 
 			System.out.println("Start flag set\n");
 
 			/*fill temporary array temp with the headers*/
-			for (int k = 0; k < HEADER_SIZE; k++)
+			for (int k = 0; k < Constants.HEADER_SIZE; k++)
 			{
 				temp[k] = header[k];
 			}
 
 			System.out.println("Chars in this package: ");
-			for (int j = HEADER_SIZE; j < BUFFER_SIZE; j++)
+			for (int j = Constants.HEADER_SIZE; j < Constants.BUFFER_SIZE; j++)
 			{
 				/*fill temporary arrays temp*/
-				temp[j] = databytes[j - HEADER_SIZE];
-				System.out.println("%c", temp[j]);
+				temp[j] = databytes[j - Constants.HEADER_SIZE];
+				System.out.printf("%c", temp[j]);
 			}
 			System.out.println("\n");
 		}
@@ -544,70 +556,70 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, uint8_t *temp, int
 		/*all packages except the first and the last one*/
 		else if (i > 0 && i != packageCount - 1)
 		{
-			System.out.println("fill header %i. pkg\n", (i+1));
+			System.out.printf("fill header %i. pkg\n", (i+1));
 
 			//Fill header[DATA_SIZE_POS]
-			header[DATA_SIZE_POS] = PACKAGE_DATA_SIZE;
+			header[Constants.DATA_SIZE_POS] = Constants.PACKAGE_DATA_SIZE;
 
 			/*
 			 * fill header with the given information*/
 			/* flags for the middle packages
 			 */
 			//flags = 0b00000000; //anpassen, ACK flag ist gesetzt!!!
-			UART_EIVE_Protocol_Flags.set_Start_Flag(header[FLAGS_POS], NOT_SET);
+			UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.NOT_SET);
 
 
 			/*fill temporary array temp with the headers*/
-			for (int k = 0; k < HEADER_SIZE; k++)
+			for (int k = 0; k < Constants.HEADER_SIZE; k++)
 			{
-				temp[i * BUFFER_SIZE + k] = header[k];
+				temp[i * Constants.BUFFER_SIZE + k] = header[k];
 			}
 
 			System.out.println("Chars in this package: ");
 			/*fill temporary arrays temp and temp28*/
-			for (int j = HEADER_SIZE; j < BUFFER_SIZE; j++)
+			for (int j = Constants.HEADER_SIZE; j < Constants.BUFFER_SIZE; j++)
 			{
-				temp[i * BUFFER_SIZE + j] = databytes[i * PACKAGE_DATA_SIZE + j - HEADER_SIZE];
-				System.out.println("%c", temp[i*BUFFER_SIZE + j]);
+				temp[i * Constants.BUFFER_SIZE + j] = databytes[i * Constants.PACKAGE_DATA_SIZE + j - Constants.HEADER_SIZE];
+				System.out.printf("%c", temp[i*Constants.BUFFER_SIZE + j]);
 			}
-			System.out.println("\n");
+			System.out.println();
 		}
 
 		/*last package*/
 		else
 		{
-			int restsize = dataLength - PACKAGE_DATA_SIZE * (packageCount - 1);
+			int restsize = dataLength - Constants.PACKAGE_DATA_SIZE * (packageCount - 1);
 
-			System.out.println("fill header last pkg, restsize: %i\n", restsize);
+			System.out.printf("fill header last pkg, restsize: %i\n", restsize);
 
 			//Fill header[DATA_SIZE_POS]
-			header[DATA_SIZE_POS] = restsize;
+			header[Constants.DATA_SIZE_POS] = (byte) restsize;
 
 			/*fill header with the given information*/
 			/*flags for the end package*/
-			UART_EIVE_Protocol_Flags.set_End_Flag(header[FLAGS_POS], SET);
+			UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
 
 			/*fill temporary array temp with the headers*/
-			for (int k = 0; k < HEADER_SIZE; k++)
+			for (int k = 0; k < Constants.HEADER_SIZE; k++)
 			{
-				temp[i * BUFFER_SIZE + k] = header[k];
+				temp[i * Constants.BUFFER_SIZE + k] = header[k];
 			}
 
 
 			System.out.println("chars in this package: ");
-			for(int j = HEADER_SIZE; j < BUFFER_SIZE; j++)
+			for(int j = Constants.HEADER_SIZE; j < Constants.BUFFER_SIZE; j++)
 			{
 				/*fill temp and temp28*/
-				if(j - HEADER_SIZE < restsize)
+				if(j - Constants.HEADER_SIZE < restsize)
 				{
 					/*fill with the rest databytes from position 0 to restsize*/
-					temp[i * BUFFER_SIZE + j] = databytes[i * PACKAGE_DATA_SIZE + j - HEADER_SIZE];
-					System.out.println("%c", temp[i*BUFFER_SIZE + j]);
+					temp[i * Constants.BUFFER_SIZE + j] = databytes[i * Constants.PACKAGE_DATA_SIZE + j - Constants.HEADER_SIZE];
+					System.out.println((char) temp[i*Constants.BUFFER_SIZE + j]);
 				}
 				else
 				{
 					/*fill with 0 from position restsize to 28*/
-					temp[i * BUFFER_SIZE + j] = 0;
+					temp[i * Constants.BUFFER_SIZE + j] = 0;
 				}
 			}
 			System.out.println("\n");
@@ -615,7 +627,7 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, uint8_t *temp, int
 
 		}
 
-		System.out.println("Package no. %i: data size %i\n", i,header[DATA_SIZE_POS]);
+		System.out.printf("Package no. %i: data size %i\n", i,header[Constants.DATA_SIZE_POS]);
 	}
 
 }
