@@ -1,22 +1,42 @@
 package protocol;
 
+import java.util.ArrayList;
+
 import protocol.crc.CRC;
 import protocol.flags.UART_EIVE_Protocol_Flags;
+import serialDriver.SerialDriver;
 
 public class UART_EIVE_Protocol_Send 
 {
+	//DEBUG
+	boolean network = false;
+
+
+	private SerialDriver comm;
 	
+	public UART_EIVE_Protocol_Send(SerialDriver comm)
+	{
+		this.comm = comm;
+	}
 	
 	/*
 	 * lastCRC_send saves the calculated CRC for the last send package
 	 * submittedCRC always saves the new received CRC
 	 * lastCRC_rcv saves the last received CRC for the initval for checking the received package
 	 */
-	byte lastCRC_send = 0x00, lastCRC_rcvd = 0x00;
+	byte lastCRC_send = CRC.INIT_CRC, lastCRC_rcvd = CRC.INIT_CRC, submittedCRC = CRC.INIT_CRC;
 	
 	
 	byte snd_flags = UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS;
 	byte rcv_flags = UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS;
+	
+
+	byte[] temp32 = new byte[Constants.BUFFER_SIZE];
+	
+	static byte[] header = new byte[Constants.HEADER_SIZE];
+	
+	byte[] data = new byte[Constants.PACKAGE_DATA_SIZE];
+
 	
 /*
  * Main Method of the EIVE UART Protocol to send data
@@ -32,7 +52,7 @@ public class UART_EIVE_Protocol_Send
  * It also uses the send_data() -method to send the transfered data to the receiver after a connection was established.
  * It returns an error if the data could not to be send and a success, if the transmission was possible
  */
-int UART_Send_Data(byte ID, byte databytes[], byte dataLength)
+public int UART_Send_Data(byte ID, byte databytes[], int dataLength)
 {
 
 	int status;
@@ -77,13 +97,13 @@ int connect_(byte ID)
 
 	//int packageCount = package_count(dataLength);
 	//uint8_t temp[BUFFER_SIZE * packageCount];
-	byte[] temp32 = new byte[Constants.BUFFER_SIZE];
+	//byte[] temp32 = new byte[Constants.BUFFER_SIZE];
 	
-	byte[] header = new byte[Constants.HEADER_SIZE];
+	//byte[] header = new byte[Constants.HEADER_SIZE];
 	
-	byte[] data = new byte[Constants.PACKAGE_DATA_SIZE];
+	//byte[] data = new byte[Constants.PACKAGE_DATA_SIZE];
 
-	byte submittedCRC = CRC.INIT_CRC;
+	//byte submittedCRC = CRC.INIT_CRC;
 
 	int status;
 
@@ -112,63 +132,72 @@ int connect_(byte ID)
 			{
 				System.out.println("Wait on answer a");
 				//wait on answer sending again temp32
-				System.out.println("Value: %i\n", wait_on_answer(temp32, ID, lastCRC_send));
+				System.out.println("Value: " + wait_on_answer(temp32, ID, lastCRC_send));
 			}
 			else
 			{
 				System.out.println("Wait on answer b");
 				//wait on answer sending again NACK
-				System.out.println("Value: %i\n", wait_on_answer(null, ID, lastCRC_send));
+				System.out.println("Value: " + wait_on_answer(null, ID, lastCRC_send));
 			}
 
 			System.out.println("connect: get_received_data");
 			//fill header, data, receive flags and submittedCRC with the received values
-			get_received_data(header, data, submittedCRC);
+			get_received_data();
 
 			//check received CRC
 			System.out.println("Check crc in connect");
-			System.out.println("Next crc check: Initval -> Last_CRC_rcvd: " + lastCRC_rcvd);
-			if(check_crc(submittedCRC, Constants.RecvBuffer, *lastCRC_rcvd)!= Constants.XST_SUCCESS)
+			System.out.println("Next crc check: Initval -> Last_CRC_rcvd: " + ((int)lastCRC_rcvd&0xff));
+			if(CRC.check_crc(submittedCRC, Constants.RecvBuffer, lastCRC_rcvd)!= Constants.XST_SUCCESS)
 			{
 				//CRC values defeer, send failure
-				send_failure(lastCRC_send, ID, lastCRC_send);
-
+				System.out.println("CRC FAILURE in connect_");
+				int ret = send_failure(lastCRC_send, ID);
+				if(ret > 0)
+					lastCRC_send = (byte) ret;
 			}
 			else
 			{
+				System.out.println("CRC SUCCESS in connect_");
 				acknowledge = Constants.ACK;
 
 				//wird in check_crc übernommen
-				//*lastCRC_rcvd = submittedCRC; //Test
+				lastCRC_rcvd = submittedCRC; //Test
 			}
 		}
 
 		//set ACK = 1
-		System.out.println("Set ack flag in connect\n");
+		System.out.println("Set ack flag in connect");
 		snd_flags = UART_EIVE_Protocol_Flags.set_ACK_Flag(snd_flags, Constants.ACK);
 
 		//Received CRC is correct
 		//check ACK
 
-		System.out.println("get ack flag\n");
+		System.out.println("get ack flag: " + ((int) rcv_flags&0xff));
 		if( UART_EIVE_Protocol_Flags.get_ACK_flag(rcv_flags) == Constants.SET)
 		{
-
-				//check ready to receive
+			//check ready to receive
 			System.out.println("get ready to rcv flag\n");
 				if( UART_EIVE_Protocol_Flags.get_ready_to_recv_flag(rcv_flags) == Constants.SET)
 				{
 					//send_data();
 					connection = Constants.ACK;
-					*lastCRC_rcvd = submittedCRC; //Test
+					lastCRC_rcvd = submittedCRC; //Test
+					System.out.println("R2R Flag set!");
 				}
 				else
 				{
 					//NOT ready to receive
+					System.out.println("FAILURE r2r flag");
 					conn_counter++;
 				}
-			}
 		}
+		else
+			System.out.println("FAILURE no ack flag set");
+		
+		//DEBUG
+		//break;
+	}
 
 	System.out.println("return at connect: conn_counter: "+ conn_counter);
 	if(conn_counter == 10)
@@ -177,6 +206,7 @@ int connect_(byte ID)
 
 	return Constants.XST_SUCCESS;
 }
+
 
 /*
  *Request to send, to establish a connection
@@ -209,14 +239,14 @@ int send_request_to_send(byte ID, byte temp32[])
 	System.out.println("Test: " + lastCRC_send);//, temp32[0]);
 	System.out.println("Test2: " + temp32[0]);
 
-	System.out.println("Next crc calc: Initval -> Last_CRC_send: %i\n", lastCRC_send);
-	int crc = calc_crc8(temp32, lastCRC_send);
+	System.out.println("Next crc calc: Initval -> Last_CRC_send: " + lastCRC_send);
+	int crc = CRC.calc_crc8(temp32, lastCRC_send);
 
-	*lastCRC_send = crc; //Kann auf nach gesetztem ACK-Flag verschoben werden.
+	lastCRC_send = (byte) crc; //Kann auf nach gesetztem ACK-Flag verschoben werden.
 
 	System.out.println("nach crc");
 
-	temp32[Constants.CRC_POS] = *lastCRC_send;
+	temp32[Constants.CRC_POS] = lastCRC_send;
 	//(*lastCRC_send) = newCRC;
 
 	int status = Constants.XST_FAILURE;
@@ -229,7 +259,13 @@ int send_request_to_send(byte ID, byte temp32[])
 		//status = UART_Send(temp32, 1);
 		System.out.println("SEND DATA!!!!!\n");
 		status = Constants.XST_SUCCESS;
-		if(send(sock, temp32, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+		
+		/*
+		 * Method from driver for serial communication
+		 *
+		 */
+		if(!comm.writeToPort(temp32))
+		//if(send(sock, temp32, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
 		{
 			status = Constants.XST_FAILURE;
 			System.out.println("ERROR sendreq2send");
@@ -255,10 +291,10 @@ int send_request_to_send(byte ID, byte temp32[])
  *
  * returns the number of the needed packages to send all the databytes
  */
-int package_count(int dataLength)
+private int package_count(int dataLength)
 {
 	int ret = 0;
-	System.out.println("DataLength: %i ------- %i\n", dataLength, (ret = dataLength/Constants.PACKAGE_DATA_SIZE));
+	System.out.println("DataLength: " + dataLength + " ------- " + (ret = dataLength/Constants.PACKAGE_DATA_SIZE));
 
 	if (dataLength % Constants.PACKAGE_DATA_SIZE > 0)
 		return (dataLength / Constants.PACKAGE_DATA_SIZE + 1);
@@ -276,12 +312,16 @@ int package_count(int dataLength)
  *
  * This method stores in the delivered parameters the received information
  */
-void get_received_data(byte[] header, uint8_t *data, uint8_t *flags, uint8_t *submittedCRC)
+private void get_received_data()//, uint8_t *flags, uint8_t *submittedCRC)
 {
-	System.out.println("getReceivedData\n");
-	extract_header(RecvBuffer, header, data);
-	*flags = header[FLAGS_POS];
-	*submittedCRC = header[CRC_POS];
+	System.out.println("getReceivedData");
+	ArrayList<byte[]> ret = UART_EIVE_Protocol_Recv.extract_header();
+	
+	header = ret.get(0);
+	data = ret.get(1);
+	
+	rcv_flags = header[Constants.FLAGS_POS];
+	submittedCRC = header[Constants.CRC_POS];
 }
 
 /*
@@ -296,19 +336,17 @@ void get_received_data(byte[] header, uint8_t *data, uint8_t *flags, uint8_t *su
  * @return:	XST_SUCCES	If the data was send properly
  * @return:	XST_FAILURE	If the data was not send properly
  */
-int send_data(uint8_t ID, uint8_t *databytes, int dataLength, uint8_t *lastCRC_send, uint8_t *lastCRC_rcvd)
+private int send_data(byte ID, byte databytes[], int dataLength)
 {
-	uint8_t send_array[Constants.BUFFER_SIZE];
+	byte send_array[] = new byte[Constants.BUFFER_SIZE];
 	int packageCount = package_count(dataLength);
-	uint8_t header[Constants.HEADER_SIZE];
-	uint8_t data[Constants.PACKAGE_DATA_SIZE];
-	byte flags;
-	byte submittedCRC;
+	//byte header[] = new byte[Constants.HEADER_SIZE];
+	//byte data[] = new byte[Constants.PACKAGE_DATA_SIZE];
 	byte temp[] = new byte[Constants.BUFFER_SIZE * packageCount];
 	int crc = 0;
 	int status = Constants.XST_SUCCESS;
 
-	System.out.println("fill packages: %i\n", packageCount);
+	System.out.println("fill packages: " + packageCount);
 	//fill array temp with the databytes and the header to send
 	fill_packages(ID, dataLength, databytes, temp, packageCount);
 
@@ -317,68 +355,83 @@ int send_data(uint8_t ID, uint8_t *databytes, int dataLength, uint8_t *lastCRC_s
 
 	while(package_counter < packageCount && tries <= 10)
 	{
-		System.out.println("while package_counter < packageCount: %i\n", packageCount);
+		System.out.println("while package_counter < packageCount: " + packageCount);
 		//Get packages
 		for(int i = 0; i < Constants.BUFFER_SIZE; i++)
 			send_array[i] = temp[package_counter * Constants.BUFFER_SIZE + i];
 
-		System.out.println("setAckflag\n");
+		System.out.println("setAckflag");
 		//Set acknowledge flag
-		set_ACK_Flag(&send_array[Constants.FLAGS_POS], ACK);
+		send_array[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.set_ACK_Flag(send_array[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.ACK);
 
-		System.out.println("before crc in while\n");
-		System.out.println("Next crc calc: Initval -> Last_CRC_send: %i\n", *lastCRC_send);
+		System.out.println("Flags in package: " + Integer.toBinaryString((int)send_array[Constants.FLAGS_POS]&0xff));
+		System.out.println("before crc in while");
+		System.out.println("Next crc calc: Initval -> Last_CRC_send: " + ((int)lastCRC_send&0xff));
 		//Calculate CRC value
-		crc = calc_crc8(send_array, *lastCRC_send);
+		crc = CRC.calc_crc8(send_array, lastCRC_send);
 
-		send_array[Constants.CRC_POS] = crc;
+		send_array[Constants.CRC_POS] = (byte) crc;
 
-		System.out.println("after crc in while\n");
+		System.out.println("after crc in while");
+		
 		//Send package -> Network now
 		//status = UART_Send(send_array, 1);
-		if(send(sock, send_array, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+		//if(send(sock, send_array, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+		/*
+		 * Method from driver for serial communication
+		 *
+		 */
+		if(!comm.writeToPort(send_array))
+		{
 			System.out.println("EEROR");
+			status = Constants.XST_FAILURE;
+		}
+		else
+			status = Constants.XST_SUCCESS;
 
-		System.out.println("after send in while\n");
-		if(status != XST_SUCCESS)
+			
+		System.out.println("after send in while");
+		if(status != Constants.XST_SUCCESS)
 		{
 			tries++;
 			continue;
 		}
 
 		//Wait on acknowledge package and check
-		uint8_t acknowledge = NACK;
+		byte acknowledge = Constants.NACK;
 		int succes = 1;
 
-		while(acknowledge != ACK)
+		while(acknowledge != Constants.ACK)
 		{
-			System.out.println("wait on ack in send_data\n");
+			System.out.println("wait on ack in send_data");
 			//wait on receive buffer to be filled
 			if(succes == 1)
 			{
-				System.out.println("SendArray\n");
-				wait_on_answer(send_array, send_array[Constants.ID_POS], &send_array[Constants.CRC_POS]);
+				System.out.println("SendArray");
+				wait_on_answer(send_array, send_array[Constants.ID_POS], send_array[Constants.CRC_POS]);
 			}
 			else
 			{
 				//wait_on_answer with NACK
-				wait_on_answer(NULL, ID, lastCRC_send);
-				System.out.println("Send NACK-Package\n");
+				wait_on_answer(null, ID, lastCRC_send);
+				System.out.println("Send NACK-Package");
 			}
 
 			//get received information
-			get_received_data(header, data, &flags, &submittedCRC);
+			get_received_data();
 
-			System.out.println("Next crc check: Initval -> Last_CRC_rcvd: %i\n", lastCRC_rcvd);
+			System.out.println("Next crc check: Initval -> Last_CRC_rcvd: " + ((int)lastCRC_rcvd&0xff));
 			//check received CRC
-			if(check_crc(submittedCRC, RecvBuffer, lastCRC_rcvd)!= Constants.XST_SUCCESS)
+			if(CRC.check_crc(submittedCRC, Constants.RecvBuffer, lastCRC_rcvd)!= Constants.XST_SUCCESS)
 			{
-				send_failure(lastCRC_send, ID, &crc);
+				System.out.println("CRC Failure on answer");
+				send_failure(lastCRC_send, ID);
+				
 				succes = 0;
 			}
 			else
 			{
-				acknowledge = ACK;
+				acknowledge = Constants.ACK;
 
 				//wird von check_crc übernommen
 				lastCRC_rcvd = submittedCRC; //Test
@@ -388,7 +441,7 @@ int send_data(uint8_t ID, uint8_t *databytes, int dataLength, uint8_t *lastCRC_s
 		System.out.println("crc correct and get ack\n");
 		//Received CRC is correct
 		//check ACK
-		if(get_ACK_flag(flags) != SET)
+		if(UART_EIVE_Protocol_Flags.get_ACK_flag(rcv_flags) != UART_EIVE_Protocol_Flags.SET)
 		{
 			/* CRC is correct, NACK */
 			System.out.println("CRC corr, received NACK");
@@ -396,15 +449,15 @@ int send_data(uint8_t ID, uint8_t *databytes, int dataLength, uint8_t *lastCRC_s
 		}
 
 		System.out.println("get last crc sent \n");
-		lastCRC_send = send_array[CRC_POS];
+		lastCRC_send = send_array[Constants.CRC_POS];
 
 		package_counter++;
 	}
 
 	if(tries == 10)
-		return XST_FAILURE;
+		return Constants.XST_FAILURE;
 
-	return XST_SUCCESS;
+	return Constants.XST_SUCCESS;
 }
 
 /*
@@ -420,25 +473,33 @@ int send_data(uint8_t ID, uint8_t *databytes, int dataLength, uint8_t *lastCRC_s
  */
 int wait_on_answer(byte send_array[], byte ID, byte lastCRC_send)
 {
-	byte[] nack_header = new byte[Constants.BUFFER_SIZE];
+	//byte[] nack_header = new byte[Constants.BUFFER_SIZE];
 
 	if(null == send_array)
 	{
-		lastCRC_send = fill_header_for_empty_data(nack_header, ID, UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS, lastCRC_send);
+		lastCRC_send = fill_header_for_empty_data(ID, UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS, lastCRC_send);
 	}
 
 	int status = Constants.XST_NO_DATA;
-	int timer;
+	int timer = 0;
 
 	while(status != Constants.XST_SUCCESS)
 	{
-		System.out.println("Wait for answer: while\n");
+		System.out.println("Wait for answer: while");
 		// -> Network now
 		//status = UART_Recv_Buffer();
-		if(recv(sock, Constants.RecvBuffer, Constants.BUFFER_SIZE, 0) < 0)
-			System.out.println("ERROR waitOnAnswer1");
+		//if(recv(sock, Constants.RecvBuffer, Constants.BUFFER_SIZE, 0) < 0)
+			//System.out.println("ERROR waitOnAnswer1");
 
+		/*
+		 * Method from driver for serial communication
+		 *
+		 */
 
+		while(!comm.isSerialDataAvailable());
+		
+		Constants.RecvBuffer = comm.getRecvBuffer();
+				
 		status = Constants.XST_SUCCESS; //test
 
 		System.out.println("Answer received!!: \n");
@@ -449,29 +510,50 @@ int wait_on_answer(byte send_array[], byte ID, byte lastCRC_send)
 
 		if(timer == Constants.MAX_TIMER)
 		{
+			System.out.println("Timer is max timer");
 			//Timeout
 			//send again array to send
 			if(null == send_array)
 			{
-				System.out.println("Timer is max timer\n");
+				
 				byte temp[] = new byte[Constants.BUFFER_SIZE];
-				temp[Constants.ID_POS]= nack_header[Constants.ID_POS];
-				temp[Constants.CRC_POS] = nack_header[Constants.CRC_POS];
-				temp[Constants.DATA_SIZE_POS] = nack_header[Constants.DATA_SIZE_POS];
-				temp[Constants.FLAGS_POS] = nack_header[Constants.FLAGS_POS];
+				temp[Constants.ID_POS]= header[Constants.ID_POS];
+				temp[Constants.CRC_POS] = header[Constants.CRC_POS];
+				temp[Constants.DATA_SIZE_POS] = header[Constants.DATA_SIZE_POS];
+				temp[Constants.FLAGS_POS] = header[Constants.FLAGS_POS];
 				
 				//UART_Send(temp, 1);
 				
 				// -> Network now
-				if(send(sock, temp, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+				
+					//if(send(sock, temp, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+						//System.out.println("ERROR waitOnAnswer2");
+				
+				/*
+				 * Method from driver for serial communication
+				 *
+				 */
+				if(!comm.writeToPort(temp))
 					System.out.println("ERROR waitOnAnswer2");
 			}
 			else
 			{
 				// -> Network now
-				//UART_Send(send_array, 1);
-				if(send(sock, send_array, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+				//UART_EIVE_Protocol_Send.UART_Send(send_array, 1);	
+				
+				/*
+				 * Method from driver for serial communication
+				 *
+				 */
+				
+				if(!comm.writeToPort(send_array))
 					System.out.println("ERROR waitOnAnswer3");
+				
+				//if(send(sock, send_array, Constants.BUFFER_SIZE, 0) != Constants.BUFFER_SIZE)
+					//System.out.println("ERROR waitOnAnswer3");
+					
+					
+				
 			}
 
 			//reset timer
@@ -500,13 +582,13 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 	/*Temporary arrays for header and data*/
 	//uint8_t header[4];
 
-	System.out.printf("Fill %i packages with: ", packageCount);
+	System.out.println("Fill " + packageCount + " packages with: ");
 	
 	for(byte b: databytes)
 		System.out.print((char) b);
 	System.out.println();
 	
-	byte[] header = new byte[Constants.HEADER_SIZE];
+	//byte[] header = new byte[Constants.HEADER_SIZE];
 	header[Constants.ID_POS] = ID;
 	header[Constants.CRC_POS] = CRC.INIT_CRC;
 	header[Constants.DATA_SIZE_POS] = 0;
@@ -520,22 +602,30 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 		/*first package*/
 		if(i == 0)
 		{
-			System.out.println("fill header first pkg\n");
+			System.out.println("fill header first pkg");
+			
 			//Fill header[DATA_SIZE_POS]
-			header[Constants.DATA_SIZE_POS] = Constants.PACKAGE_DATA_SIZE;
-
-			System.out.println("Set start flag\n");
+			if(databytes.length > Constants.PACKAGE_DATA_SIZE - 1)
+				header[Constants.DATA_SIZE_POS] = Constants.PACKAGE_DATA_SIZE;
+			else
+				header[Constants.DATA_SIZE_POS] = (byte) databytes.length;
+			
+			System.out.println("Set start flag");
 			/*
 			 * fill header with the given information
 			 * flags for the start package
 			 */
-			UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
+			header[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
 
 			//Setting end-flag if only one package will be send
 			if(packageCount == 1)
-				UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
+			{
+				System.out.println("Before end flag");
+				header[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
+				
+			}
 
-			System.out.println("Start flag set\n");
+			System.out.println("Start flag set");
 
 			/*fill temporary array temp with the headers*/
 			for (int k = 0; k < Constants.HEADER_SIZE; k++)
@@ -546,17 +636,21 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 			System.out.println("Chars in this package: ");
 			for (int j = Constants.HEADER_SIZE; j < Constants.BUFFER_SIZE; j++)
 			{
-				/*fill temporary arrays temp*/
-				temp[j] = databytes[j - Constants.HEADER_SIZE];
-				System.out.printf("%c", temp[j]);
+				if(j - Constants.HEADER_SIZE < dataLength)
+					/*fill temporary arrays temp*/
+					temp[j] = databytes[j - Constants.HEADER_SIZE];
+				else
+					/*fill up with zero*/
+					temp[j] = 0;
+				System.out.println((char) temp[j]);				
 			}
-			System.out.println("\n");
+			//System.out.println("\n");
 		}
 
 		/*all packages except the first and the last one*/
 		else if (i > 0 && i != packageCount - 1)
 		{
-			System.out.printf("fill header %i. pkg\n", (i+1));
+			System.out.println("fill header " + (i+1) + ". pkg");
 
 			//Fill header[DATA_SIZE_POS]
 			header[Constants.DATA_SIZE_POS] = Constants.PACKAGE_DATA_SIZE;
@@ -566,7 +660,7 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 			/* flags for the middle packages
 			 */
 			//flags = 0b00000000; //anpassen, ACK flag ist gesetzt!!!
-			UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.NOT_SET);
+			header[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.set_Start_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.NOT_SET);
 
 
 			/*fill temporary array temp with the headers*/
@@ -580,9 +674,9 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 			for (int j = Constants.HEADER_SIZE; j < Constants.BUFFER_SIZE; j++)
 			{
 				temp[i * Constants.BUFFER_SIZE + j] = databytes[i * Constants.PACKAGE_DATA_SIZE + j - Constants.HEADER_SIZE];
-				System.out.printf("%c", temp[i*Constants.BUFFER_SIZE + j]);
+				System.out.println((char) temp[i*Constants.BUFFER_SIZE + j]);
 			}
-			System.out.println();
+			//System.out.println();
 		}
 
 		/*last package*/
@@ -590,14 +684,14 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 		{
 			int restsize = dataLength - Constants.PACKAGE_DATA_SIZE * (packageCount - 1);
 
-			System.out.printf("fill header last pkg, restsize: %i\n", restsize);
+			System.out.println("fill header last pkg, restsize: " + restsize);
 
 			//Fill header[DATA_SIZE_POS]
 			header[Constants.DATA_SIZE_POS] = (byte) restsize;
 
 			/*fill header with the given information*/
 			/*flags for the end package*/
-			UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
+			header[Constants.FLAGS_POS] = UART_EIVE_Protocol_Flags.set_End_Flag(header[Constants.FLAGS_POS], UART_EIVE_Protocol_Flags.SET);
 
 			/*fill temporary array temp with the headers*/
 			for (int k = 0; k < Constants.HEADER_SIZE; k++)
@@ -622,12 +716,12 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
 					temp[i * Constants.BUFFER_SIZE + j] = 0;
 				}
 			}
-			System.out.println("\n");
+			//System.out.println("\n");
 
 
 		}
 
-		System.out.printf("Package no. %i: data size %i\n", i,header[Constants.DATA_SIZE_POS]);
+		System.out.println("Package no. " + i + ": data size " + header[Constants.DATA_SIZE_POS]);
 	}
 
 }
@@ -642,14 +736,14 @@ void fill_packages(byte ID, int dataLength, byte[] databytes, byte[] temp, int p
  *
  * This method fills the header of empty packages which are going to be send
  */
-byte fill_header_for_empty_data(byte[] header, byte ID, byte flags, byte lastCRC_send)
+public static byte fill_header_for_empty_data(byte ID, byte flags, byte lastCRC_send)
 {
-	System.out.println("fill header for empty dataaa\n");
+	System.out.println("fill header for empty dataaa");
 	byte[] temp_array_CRC = new byte[Constants.BUFFER_SIZE];
 	temp_array_CRC[Constants.ID_POS] = ID;
 	temp_array_CRC[Constants.FLAGS_POS] = flags;
 
-	System.out.printf("Next crc calc: Initval -> Last_CRC_send: %i\n", lastCRC_send);
+	System.out.println("Next crc calc: Initval -> Last_CRC_send: " + ((int)lastCRC_send&0xff));
 	/*calculate new CRC value*/
 	byte newCRC = CRC.calc_crc8(temp_array_CRC, lastCRC_send);
 
@@ -665,5 +759,35 @@ byte fill_header_for_empty_data(byte[] header, byte ID, byte flags, byte lastCRC
 	return newCRC;
 }
 
+
+private int send_failure(byte lastCRC_send, byte iD) {
+
+	byte failure_flags = UART_EIVE_Protocol_Flags.UNSET_ALL_FLAGS;
+	
+	//byte header[] = new byte[Constants.HEADER_SIZE];
+	
+	UART_EIVE_Protocol_Flags.set_ACK_Flag(failure_flags, Constants.NACK);
+	
+	int calc_crc = fill_header_for_empty_data(header[Constants.ID_POS], header[Constants.FLAGS_POS], lastCRC_send);
+	
+	
+	byte temp[] = new byte[Constants.BUFFER_SIZE];
+	temp[Constants.ID_POS] = header[Constants.ID_POS];
+	temp[Constants.CRC_POS] = header[Constants.CRC_POS];
+	temp[Constants.DATA_SIZE_POS] = header[Constants.DATA_SIZE_POS];
+	temp[Constants.FLAGS_POS] = header[Constants.FLAGS_POS];
+	
+	//send method
+	/*
+	 * Method from driver for serial communication
+	 *
+	 */
+	
+	comm.writeToPort(temp);
+
+	this.lastCRC_send = (byte) calc_crc;
+	
+	return Constants.XST_SUCCESS;
+}
 
 }

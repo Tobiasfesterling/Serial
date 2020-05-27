@@ -328,9 +328,13 @@ public class SerialDriver {
 		if (!connected)
 			return false;
 
+		int b = 0;
+		
 		for (int i = 0; i < sendBuffer.length; i++) {
 			try {
 				out.write(sendBuffer[i]);
+				
+				b++;
 			} catch (IOException e) {
 
 				e.printStackTrace();
@@ -341,8 +345,11 @@ public class SerialDriver {
 		try {
 			out.flush();
 		} catch (IOException e) {
-			// TODO: handle exception
+			e.printStackTrace();
+			return false;
 		}
+		
+		System.out.println(b + "/" + sendBuffer.length + " byte(s) successfully written");
 
 		return true;
 	}

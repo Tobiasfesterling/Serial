@@ -30,7 +30,7 @@ public class Constants {
 	
 	public static final byte INIT_CRC = 0x00;
 	
-	public static final int MAX_TIMER = 5000; //need to be calculcated!!
+	public static final int MAX_TIMER = 5000000; //need to be calculcated!!
 	
 	/*Identification mask for TM/TC */
 	public static final byte TC_MASK = 0b00000000;

@@ -60,13 +60,13 @@ public static byte calc_crc8_for_data(byte bytes[], int length, byte crc_initval
 		crc_val = calc_crc8_for_one_byte(crc_val, bytes[i]);
 	}
 
-	System.out.println("calculated crc: " + crc_val);
+	System.out.println("calculated crc: " + ((int)crc_val&0xff));
 	return crc_val;
 }
 
 public static byte calc_crc8(byte send_array[], byte crc_initval)
 {
-	System.out.println("crc8: initval: " + crc_initval);
+	System.out.println("crc8: initval: " + ((int)crc_initval&0xff));
 	byte temp31[] = new byte[Constants.BUFFER_SIZE - 1];
 
 	for(int i = 0; i < Constants.CRC_POS; i++)
