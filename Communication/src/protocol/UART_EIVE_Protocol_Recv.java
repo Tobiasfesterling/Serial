@@ -4,7 +4,6 @@ import java.util.ArrayList;
 
 import main.MainClassReceiverSide;
 import main.MainClassTransmitterSide;
-import main.ProtocolTest;
 import main.tcs.TCs;
 import protocol.Constants;
 import protocol.crc.CRC;
